@@ -1,2 +1,2 @@
-# Text Analytics on Customer reviews for Kia Seltos, Jeep Compass & MG Hector
-This repository contain code for performing text analytics on customer review
+# Text Analytics on customer reviews for Kia Seltos, Jeep Compass & MG Hector
+Step1: Scrape cardekho.com, carwale.com & team-bhp webiste to get customer reviews for Kia Seltos, Jeep Compass & MG Hector
