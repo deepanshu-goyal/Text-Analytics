@@ -28,7 +28,7 @@ create_dtm <- function(raw_data)
   dtm_df = reviews_df %>% mutate(doc=row_number()) %>% unnest_tokens(word,review) %>% anti_join(stop_words) %>% 
            filter(!word %in% values) %>% group_by(doc) %>% count(word)
   
-  final_dtm = cast_sparse(dtm_df,word,n);
+  final_dtm = cast_sparse(dtm_df,doc, word,n);
   return(final_dtm)
 }
 
