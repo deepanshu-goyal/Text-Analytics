@@ -7,6 +7,7 @@ if(!require(igraph)) {install.packages("igraph")}
 if(!require(tidyr)) {install.packages("tidyr")}
 if(!require(topicmodels)) {install.packages("topicmodels")}
 if(!require(ggraph)) {install.packages("ggraph")}
+if(!require(stopwords)) {install.packages("stopwords")}
 
 library(dplyr)
 library(tidytext)
@@ -15,6 +16,7 @@ library(wordcloud)
 library(igraph)
 library(tidyr)
 library(topicmodels)
+library(stopwords)
 
 
 ## Function 1: Create DTM from a csv file containing reviews in 'Reviews' column
@@ -26,7 +28,7 @@ create_dtm <- function(raw_data)
   dtm_df = reviews_df %>% mutate(doc=row_number()) %>% unnest_tokens(word,review) %>% anti_join(stop_words) %>% 
            filter(!word %in% values) %>% group_by(doc) %>% count(word)
   
-  final_dtm = cast_sparse(dtm_df,doc, word,n);
+  final_dtm = cast_sparse(dtm_df,word,n);
   return(final_dtm)
 }
 
@@ -39,7 +41,7 @@ word_tokens <- function(raw_data)
   values = c('car','kia','seltos','cars','jeep','compass','MG','hector','mg')
   review = as.character(raw_data$Review)
   review_df = tibble(review=review)
-  token = review_df %>% unnest_tokens(word,review) %>% anti_join(stopwords) %>% count(word,sort = TRUE) %>% 
+  token = review_df %>% unnest_tokens(word,review) %>% anti_join(stop_words) %>% count(word,sort = TRUE) %>% 
     filter(!word %in% values) %>% top_n(25) %>% mutate(word =reorder(word,n))
   return(token)
 }
@@ -66,7 +68,7 @@ create_bigram <- function(raw_data)
   reviews_df = data.frame(review=reviews)
   dtm_df = reviews_df %>% unnest_tokens(bigram,review,token = 'ngrams',n=2) %>% 
     separate(bigram, c('word1','word2'),sep =" ") %>% 
-    filter(!word1 %in% stopwords$word) %>% filter(!word2 %in% stop_words$word) %>%
+    filter(!word1 %in% stop_words$word) %>% filter(!word2 %in% stop_words$word) %>%
     filter(!word1 %in% values) %>% filter(!word2 %in% values) %>% count(word1,word2,sort = TRUE)
   return(dtm_df)
 }
