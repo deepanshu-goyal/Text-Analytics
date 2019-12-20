@@ -156,3 +156,17 @@ distill.cog = function(dtm, # input dtm
        main = title)
   
 } # distill.cog func ends
+
+
+# Function 7: Create graph from bigram
+
+create.graph = function(bigram,frequency=5)
+  {
+  bigram_graph = bigram %>% filter(n>frequency) %>% graph_from_data_frame()
+  
+  ggraph(bigram_graph, layout = 'fr') +
+  geom_edge_link() +
+  geom_node_point() +
+  geom_node_text(aes(label = name), vjust = 1, hjust = 1)
+  
+}
