@@ -22,11 +22,11 @@ library(topicmodels)
 create_dtm <- function(raw_data)
 {
   values = c('car','kia','seltos','cars','jeep','compass','MG','hector','mg')
-  reviews_df = data_frame(brand = tolower(as.character(raw_data$Brand)), review = tolower(as.character(raw_data$Review)))
+  reviews_df = data_frame(review = tolower(as.character(raw_data$Review)))
   dtm_df = reviews_df %>% mutate(doc=row_number()) %>% unnest_tokens(word,review) %>% anti_join(stop_words) %>% 
-           filter(!word %in% values) %>% count(word)
+           filter(!word %in% values) %>% group_by(doc) %>% count(word)
   
-  final_dtm = cast_sparse(dtm_df,doc,word,n);
+  final_dtm = cast_sparse(dtm_df,doc, word,n);
   return(final_dtm)
 }
 
