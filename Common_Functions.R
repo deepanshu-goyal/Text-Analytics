@@ -54,7 +54,7 @@ word_tokens <- function(raw_data)
 bar_chart <- function(tokens,title)
 {
   tokens %>% ggplot(aes(word,n))+
-    geom_bar(stat = "identity", col = "cadetblue", fill = "cadetblue") +
+    geom_bar(stat = "identity", col = "cadetblue", fill = "cadetblue", width=.9, position = position_dodge(width = .25)) +
     geom_text(aes(label=n), hjust=-0.2) +
     ggtitle(label = title)+
     coord_flip()
