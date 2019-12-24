@@ -57,6 +57,7 @@ bar_chart <- function(tokens,title)
     geom_bar(stat = "identity", col = "cadetblue", fill = "cadetblue", width=.7, position = position_dodge(width = 1)) +
     geom_text(aes(label=n), hjust=-0.2,size=4) +
     ggtitle(label = title)+
+    theme(text = element_text(size=15))+
     coord_flip()
   
 }
