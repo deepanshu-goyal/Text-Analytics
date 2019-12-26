@@ -1,0 +1,109 @@
+---
+title: "Text Analysis - Car Reviews"
+author: "Deepanshu Goyal"
+date: "December 10, 2019"
+output:
+  html_document: default
+  word_document: default
+---
+
+
+```{r Install required package & custom functions, warning=FALSE}
+
+rm(list=ls()) 
+source('https://raw.githubusercontent.com/deepanshu-goyal/Text-Analytics/master/Common_Functions.R')
+
+```
+
+## Read car reviews
+Read Kia Seltos, Jeep Compass & MG Hector car reviews scrapped from cardekho.com, carwale.com & team-bhp.com
+
+```{r Car Reviews}
+setwd(getwd())
+data = read.csv('https://raw.githubusercontent.com/deepanshu-goyal/Text-Analytics/master/FinalReview.csv', header = TRUE,sep = ',')
+
+seltos = data %>% filter(Brand=='Kia Seltos')
+Compass = data %>% filter(Brand=='Jeep Compass')
+hector = data %>% filter(Brand=='MG Hector')
+
+```
+
+## Random sample same number of reviews for each car type 
+
+Random sample 175 reviews for each car, this will help in comparative analysis.We have used sample without replacement to get one review only once. 
+
+```{r sampling}
+seltos_sample = sample_n(seltos, 175, replace = FALSE)
+compass_sample = sample_n(Compass, 175, replace = FALSE)
+hector_sample = sample_n(hector, 175, replace = FALSE)
+
+```
+
+## Text Analytics 1: Count frequency of different ratings
+
+```{r Frequency of ratings, echo=FALSE}
+seltos_rating_freq = seltos_sample %>% count(Rating) %>% rename(seltos_count=n)
+print(seltos_rating_freq)
+
+compass_rating_freq = compass_sample %>% count(Rating) %>% rename(compass_count=n)
+print(compass_rating_freq)
+
+hector_rating_freq = hector_sample %>% count(Rating) %>% rename(hector_count=n)
+print(hector_rating_freq)
+```
+
+## Text Analytics 2: create DTM
+
+```{r}
+seltos_dtm = create_dtm(seltos);seltos_dtm[1:8,1:8]
+compass_dtm = create_dtm(Compass);compass_dtm[1:8,1:8]
+hector_dtm = create_dtm(hector);hector_dtm[1:8,1:8]
+
+```
+
+
+## Text Analytics 3: Simple bar chart of top tokens
+
+```{r}
+token1 = word_tokens(seltos)
+token2 = word_tokens(Compass)
+token3 = word_tokens(hector)
+#Bar chart for Kia Seltos
+bar_chart(token1,'Top 20 words for Kia Seltos')
+#Bar chart for Jeep Compass
+bar_chart(token2,'Top 20 words for Jeep Compass')
+#Bar chart for MG Hector
+bar_chart(token3,'Top 20 words for MG Hector')
+
+common_token =  intersect(token1$word,token2$word) %>% intersect(token3$word)
+
+print(common_token)
+```
+
+## Text Analytics 4: Wordcloud of top tokens
+```{r}
+wordcloud(token1$word,token1$n,scale = c(2, 0.5),colors = brewer.pal(8, "Dark2"))
+wordcloud(token2$word,token2$n,scale = c(2, 0.5),colors = brewer.pal(8, "Dark2"))
+wordcloud(token3$word,token3$n,scale = c(2, 0.5),colors = brewer.pal(8, "Dark2"))
+```
+
+# Text Analytics 5: Create Bigrams 
+
+```{r}
+#Bigrams for Seltos
+seltos_bigram = create_bigram(seltos) %>% top_n(20)
+print(seltos_bigram)
+#Bigrams for Compass
+compass_bigram = create_bigram(Compass) %>% top_n(20)
+print(compass_bigram)
+#Bigrams for Hector
+hector_bigram = create_bigram(hector) %>% top_n(20)
+print(hector_bigram)
+```
+## Text Analytics 6: Create Co-occurance graphs i.e. two words occured most of the time within a document. 
+
+```{r}
+distill.cog(seltos_dtm,'Kia Seltos COG',15)
+distill.cog(compass_dtm,'Jeep Compass COG',15)
+distill.cog(hector_dtm,'MG Hector COG',15)
+```

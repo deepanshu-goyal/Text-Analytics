@@ -1,0 +1,353 @@
+---
+title: "Sentiment-Analysis"
+author: "Deepanshu Goyal"
+date: "December 18, 2019"
+output: html_document
+---
+
+```{r Install required package & custom functions, message=FALSE, warning=FALSE}
+rm(list=ls()) 
+source('https://raw.githubusercontent.com/deepanshu-goyal/Text-Analytics/master/Common_Functions.R')
+
+if (!require(qdap)) {install.packages("qdap")}
+if(!require(textdata)) {install.packages("textdata")}
+if(!require(ggraph)) {install.packages("ggraph")}
+if(!require(ldatuning)) {install.packages("ldatuning")}
+if (!require(udpipe)){install.packages("udpipe")}
+
+library(qdap)
+library(sentimentr)
+library(tidytext)
+library(ggraph)
+library(igraph)
+library(topicmodels)
+library(ldatuning)
+library(udpipe)
+```
+
+## Step 1: Read data from csv file and seperate reviews for Seltos, Compass & Hector
+
+```{r read csv files, warning=FALSE}
+setwd(getwd())
+data = read.csv('https://raw.githubusercontent.com/deepanshu-goyal/Text-Analytics/master/FinalReview.csv', header = TRUE,sep = ',')
+
+seltos = data %>% filter(Brand=="Kia Seltos")
+compass = data %>% filter(Brand =="Jeep Compass")
+hector = data %>% filter(Brand== "MG Hector")
+
+```
+
+## Random sample 400 reviews for each car type 
+
+Random sample 400 reviews for each car, this will help in comparative analysis.We have used sample without replacement to get one review only once. 
+
+```{r}
+seltos_sample = sample_n(seltos, 400, replace = FALSE)
+compass_sample = sample_n(compass, 400, replace = FALSE)
+hector_sample = sample_n(hector, 400, replace = FALSE)
+
+
+
+seltos_review = tolower(as.character(seltos_sample$Review))
+Compass_review = tolower(as.character(compass_sample$Review))
+hector_review = tolower(as.character(hector_sample$Review))
+
+final_df = bind_rows(seltos_sample,compass_sample,hector_sample)
+
+
+review_df = data_frame(brand = tolower(as.character(final_df$Brand)),review = tolower(as.character(final_df$Review)))
+review_dtm = create_dtm(final_df)
+
+review_bow = review_df %>% group_by(brand) %>% mutate(doc_id=row_number()) %>% ungroup() %>% unnest_tokens(word,review)
+
+
+```
+
+
+
+## Step 2: Find out key Features/Topics in a corpus
+Option1: Using word frequency, bigrams & COG graphs
+Option2: Using Nouns or Noun Phrases
+Option3: using Topic modeling techniques such as LDA
+Option4: using clustering technique - k means  
+
+Option1: Use bigrams & graphs (COG, igraph)
+```{r Cooccurange graphs for car reviews}
+
+#COG for all the reviews
+review_bigram = create_bigram(final_df)
+
+create.graph(review_bigram,10)
+
+distill.cog(review_dtm, 'COG of Car Reviews',12)
+
+```
+
+Option2: Feature extraction using Nouns or Nouns Phrases
+
+```{r Feature extraction using Noun or Noun Phrases}
+
+#ud_model_english <- udpipe_download_model(language = "english")
+
+english_model = udpipe_load_model("./english-ewt-ud-2.4-190531.udpipe")
+
+data_nlp = udpipe_annotate(english_model,x=review_df$review)
+
+data_nlp = as.data.frame(data_nlp)
+data_nlp$tag = as_phrasemachine(data_nlp$upos, type = 'upos')
+head(data_nlp)
+
+#noun_phrase = keywords_phrases(x = data_nlp$tag,term = tolower(data_nlp$token),
+#                                   pattern = "(A|N)*N(P+D*(A|N)*N)*", 
+#                                   is_regex = TRUE, detailed = FALSE)
+
+#noun_phrase = subset(noun_phrase,ngram>1 & freq>1)
+#head(noun_phrase,20)
+```
+
+```{r Frequent NOUN in the entire corpus}
+data_noun = data_nlp %>% subset(., upos %in% 'NOUN')
+top_noun = txt_freq(data_noun$lemma)
+
+values = c('kia','seltos', 'mg','hector','jeep','compass')
+top_noun = top_noun %>% filter(!key %in% values)
+
+head(top_noun,20)
+```
+```{r frequent occurance of two words in the entire corpus}
+data_cooc = cooccurrence(x = data_nlp$lemma, 
+                           relevant =  data_nlp$upos %in% c('NOUN'))
+
+data_cooc = data_cooc %>% filter(!term1 %in% values) %>% filter(!term2 %in% values)
+head(data_cooc,20)
+```
+
+```{r frequent occurance of two words in each document}
+data_co = cooccurrence(x = subset(data_nlp, upos %in% c('NOUN')),
+                        term = 'lemma',
+                        group = c("doc_id"))
+data_co = data_co %>% filter(!term1 %in% values) %>% filter(!term2 %in% values)
+
+head(data_co,20)
+```
+
+
+
+option3: Find topics using topic modeling - LDA
+
+
+```{r find number of optimal topics in LDA}
+
+result = ldatuning::FindTopicsNumber(
+  review_dtm,
+  topics = seq(from = 2, to = 20, by = 1),
+  metrics = c("Griffiths2004", "CaoJuan2009", "Arun2010", "Deveaud2014"),
+  method = "Gibbs",
+  control = list(seed = 77),
+  mc.cores = 2L,
+  verbose = TRUE
+)
+
+ldatuning::FindTopicsNumber_plot(result)
+```
+
+
+
+```{r Find topics using LDA - 12 Topics}
+#find topics from consolidated data (Seltos, Jeep, Hector)
+find_topics(review_dtm,12)
+```
+
+```{r ind topics using LDA - 7 Topics}
+#find topics from consolidated data (Seltos, Jeep, Hector)
+find_topics(review_dtm,7)
+```
+
+
+
+## Step 3: Choose Features/Topics
+
+```{r Keywords}
+keywords = c('clearance','price','design','engine','sound','clutch','service','petrol','diesel','driving','sunroof','mileage','quality','safety','boot')
+
+```
+
+
+## Step 4: Score each document usig standard dictionary, QDAP(Princeton dictionary) & SentimentR (Lexicon & Valence shifter)
+
+Type 1: Using Dictionary ( bing, afinn & nrc) 
+
+```{r get lexicon}
+afinn = get_sentiments("afinn")
+bing =  get_sentiments("bing")
+nrc = get_sentiments("nrc")
+```
+
+## Scoring using BING dictionary i.e. difference of postive & negative words in each document. Find out the average for the entire corpus
+
+```{r Sentiment analsysis using bing dictionary}
+#Select document based on feature
+filter_doc = review_bow %>% filter(word %in% keywords)
+
+bing_score = review_bow %>% inner_join(bing) %>% count(brand,doc_id,sentiment) %>% spread(sentiment,n,fill = 0) %>% group_by(brand,doc_id) %>% summarise(sentiment=positive-negative)
+
+# Overall keyword based score
+overall_score = inner_join(bing_score,filter_doc,by=c("brand","doc_id")) %>% group_by(brand,word) %>% summarise(cov_score = mean(sentiment)/sd(sentiment)) %>% spread(word,cov_score, fill = 0)
+overall_score
+
+
+score_bing = bing_score %>% group_by(brand) %>% summarise(mean_Score = mean(sentiment), sd_score = sd(sentiment),cov_score = mean_Score/sd_score)
+score_bing
+
+ggplot(bing_score,aes(doc_id,sentiment, fill=brand))+
+  geom_col()+
+  facet_wrap(~brand,ncol=1,scales = "free_x")
+
+```
+
+## Scoring using AFINN dictionary.Find out the average for the entire corpus
+```{r Sentiment analsysis using afinn dictionary}
+filter_doc = review_bow %>% filter(word %in% keywords)
+
+affin_score = review_bow %>% inner_join(afinn) %>% group_by(brand,doc_id) %>% summarise(sentiment = sum(value))
+
+
+# Overall keyword based score
+overall_score = inner_join(affin_score,filter_doc,by=c("brand","doc_id")) %>% group_by(brand,word) %>% summarise(cov_score = mean(sentiment)/sd(sentiment)) %>% spread(word,cov_score, fill = 0)
+overall_score
+
+
+score_affin = affin_score %>% group_by(brand) %>% summarise(mean_Score = mean(sentiment), sd_score = sd(sentiment),cov_score = mean_Score/sd_score)
+score_affin
+
+
+
+ggplot(affin_score,aes(doc_id,sentiment, fill=brand))+
+  geom_col()+
+  facet_wrap(~brand,ncol=1,scales = "free_x")
+
+
+```
+
+
+## Scoring using NRC dictionary.Find out the average for the entire corpus
+```{r}
+filter_doc = review_bow %>% filter(word %in% keywords)
+
+nrc_score = review_bow %>% inner_join(nrc) %>% count(brand,doc_id,sentiment) %>% spread(sentiment, n, fill=0) %>% group_by(brand, doc_id) %>% summarise(sentiment = positive-negative)
+
+# Overall keyword based score
+overall_score = inner_join(nrc_score,filter_doc,by=c("brand","doc_id")) %>% group_by(brand,word) %>% summarise(cov_score = mean(sentiment)/sd(sentiment)) %>% spread(word,cov_score, fill = 0)
+overall_score
+
+score_nrc = nrc_score %>% group_by(brand) %>% summarise(mean_Score = mean(sentiment), sd_score = sd(sentiment),cov_score = mean_Score/sd_score)
+score_nrc
+
+ggplot(nrc_score,aes(doc_id,sentiment,fill=brand))+
+  geom_col()+
+  facet_wrap(~brand,ncol=1,scales = "free_x")
+```
+
+
+
+
+
+## Type 2: Polarity Score using qdap
+
+```{r Sentiment Score using Qdap-Polarity Score}
+#Calculate polarity score for Kia Seltos
+
+seltos_polarity = qdap::polarity(seltos_review)
+
+seltos_feature_score = seltos_polarity$all %>% mutate(doc_id = row_number()) %>% select(doc_id,polarity, text.var) %>% 
+                unnest_tokens(word,text.var) %>% filter(word %in% keywords) %>% mutate(brand='Kia Seltos') %>%
+                group_by(brand, word) %>% summarise(cov_score = mean(polarity)/sd(polarity)) %>%
+                spread(word,cov_score,fill = 0)
+
+#Calculate polarity score for Jeep Compass
+
+compass_polarity = qdap::polarity(Compass_review)
+
+compass_feature_score = compass_polarity$all %>% mutate(doc_id = row_number()) %>% select(doc_id,polarity, text.var) %>% 
+                unnest_tokens(word,text.var) %>% filter(word %in% keywords) %>% mutate(brand='Jeep Compass') %>%
+                group_by(brand, word) %>% summarise(cov_score = mean(polarity)/sd(polarity)) %>%
+                spread(word,cov_score,fill = 0)
+
+
+#Calculate polarity score for MG Hector
+
+hector_polarity = qdap::polarity(hector_review)
+
+hector_feature_score = hector_polarity$all %>% mutate(doc_id = row_number()) %>% select(doc_id,polarity, text.var) %>% 
+                unnest_tokens(word,text.var) %>% filter(word %in% keywords) %>% mutate(brand='MG Hector') %>%
+                group_by(brand, word) %>% summarise(cov_score = mean(polarity)/sd(polarity)) %>%
+                spread(word,cov_score,fill = 0)
+
+
+compass_qdap = data.frame(brand="Jeep Compass", mean_score = compass_polarity$group$ave.polarity, sd_score = compass_polarity$group$sd.polarity, cov_score = compass_polarity$group$stan.mean.polarity)
+
+seltos_qdap = data.frame(brand="Kia Seltos", mean_score = seltos_polarity$group$ave.polarity, sd_score = seltos_polarity$group$sd.polarity, cov_score = seltos_polarity$group$stan.mean.polarity)
+
+hector_qdap = data.frame(brand="MG Hector", mean_score = hector_polarity$group$ave.polarity, sd_score = hector_polarity$group$sd.polarity, cov_score = hector_polarity$group$stan.mean.polarity)
+
+
+#feature-wise score
+bind_rows(compass_feature_score,seltos_feature_score,hector_feature_score)
+
+#Cummulative score
+bind_rows(compass_qdap, seltos_qdap, hector_qdap)
+```
+## Type 3: Polarity Score using sentiment (lexicon:hash_sentiment_jockers_rinker & Valence Shifter:hash_valence_shifters)
+
+```{r}
+#Calculate sentiment score for Kia Seltos
+seltos_score = sentiment_by(seltos_review, polarity_dt = lexicon::hash_sentiment_jockers_rinker,
+               valence_shifters_dt = lexicon::hash_valence_shifters)
+
+s_score = seltos_score %>% summarise(brand = "Kia Seltos", mean_score = mean(ave_sentiment), sd_score = sd(ave_sentiment), cov_score = mean_score/sd_score)
+
+
+seltos_df = review_bow %>% filter(brand=='kia seltos') %>% rename(element_id = doc_id)
+
+seltos_final = inner_join(seltos_df,seltos_score,by='element_id')
+
+seltos_feature_score = seltos_final %>% filter(word %in% keywords) %>% group_by(brand,word) %>% 
+                      summarise(cov_score = mean(ave_sentiment)/sd(ave_sentiment)) %>% spread(word,cov_score, fill = 0)
+
+#Calculate sentiment score for Jeep Compass
+compass_score = sentiment_by(Compass_review, polarity_dt = lexicon::hash_sentiment_jockers_rinker,
+                valence_shifters_dt = lexicon::hash_valence_shifters)
+
+c_score = compass_score %>% summarise(brand = "Jeep Compass", mean_score = mean(ave_sentiment), sd_score = sd(ave_sentiment), cov_score = mean_score/sd_score)
+
+
+compass_df = review_bow %>% filter(brand=='jeep compass') %>% rename(element_id = doc_id)
+
+compass_final = inner_join(compass_df,compass_score,by='element_id')
+
+compass_feature_score = compass_final %>% filter(word %in% keywords) %>% group_by(brand,word) %>% 
+                      summarise(cov_score = mean(ave_sentiment)/sd(ave_sentiment)) %>% spread(word,cov_score, fill = 0)
+
+#Calculate sentiment score for MG Hector
+hector_score = sentiment_by(hector_review, polarity_dt = lexicon::hash_sentiment_jockers_rinker,
+               valence_shifters_dt = lexicon::hash_valence_shifters)
+
+h_score = hector_score %>% summarise(brand = "MG Hector", mean_score = mean(ave_sentiment), sd_score = sd(ave_sentiment), cov_score = mean_score/sd_score)
+
+
+hector_df = review_bow %>% filter(brand=='mg hector') %>% rename(element_id = doc_id)
+
+hector_final = inner_join(hector_df,hector_score,by='element_id')
+
+hector_feature_score = hector_final %>% filter(word %in% keywords) %>% group_by(brand,word) %>% 
+                      summarise(cov_score = mean(ave_sentiment)/sd(ave_sentiment)) %>% spread(word,cov_score, fill = 0)
+
+
+
+bind_rows(c_score, s_score, h_score)
+
+bind_rows(compass_feature_score,seltos_feature_score,hector_feature_score)
+```
+
+
+
