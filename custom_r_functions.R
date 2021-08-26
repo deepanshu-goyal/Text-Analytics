@@ -1,3 +1,4 @@
+# Function 1
 create_dtm <- function(raw_data)
 {
   data_df = data_frame(text = tolower(as.character(raw_data$text)))
@@ -9,6 +10,7 @@ create_dtm <- function(raw_data)
   
 }
 
+# Function 2
 create_bigram <- function(data)
 {
   text = tolower(as.character(data$text))
@@ -20,6 +22,8 @@ create_bigram <- function(data)
   return(bigram_df)
 }
 
+
+# Function 3
 find_topics = function(dtm, k=5)
 {
   data_lta = LDA(dtm,k)
@@ -43,6 +47,8 @@ find_topics = function(dtm, k=5)
   return(data_graph)
 }
 
+
+# Function 4
 # function to create word tokens
 create_word_tokens <- function(data)
 {
@@ -53,6 +59,7 @@ create_word_tokens <- function(data)
 }
 
 
+# Function 5
 #function to plot bar charts
 bar_chart <- function(tokens,title)
 {
