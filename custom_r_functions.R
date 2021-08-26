@@ -2,9 +2,7 @@
 create_dtm <- function(raw_data)
 {
   data_df = data_frame(text = tolower(as.character(raw_data$text)))
-  
   dtm_df = data_df%>% mutate(docid=row_number()) %>% unnest_tokens(word,text) %>% anti_join(stop_words) %>%   group_by(docid) %>% count(word)
-  
   final_dtm = cast_sparse(dtm_df,docid, word,n)
   return(final_dtm)
   
